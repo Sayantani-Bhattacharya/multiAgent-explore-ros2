@@ -84,6 +84,21 @@ bool MergingPipeline::estimateTransforms(rclcpp::Logger logger,
   }
   finder = {};
 
+  /* guard: FLANN KNN (k=2) crashes if any image has fewer than 2 keypoints */
+  for (size_t i = 0; i < image_features.size(); ++i) {
+    if (image_features[i].keypoints.size() < 2) {
+      RCLCPP_WARN(logger,
+                  "[estimateTransforms] Image %zu has only %zu keypoints — "
+                  "not enough for feature matching. Skipping estimation this cycle.",
+                  i, image_features[i].keypoints.size());
+      // composeMaps() asserts images_.size() == transforms_.size(), so we must
+      // resize transforms_ before returning. Empty mats are skipped by composeMaps.
+      transforms_.clear();
+      transforms_.resize(images_.size());
+      return true;
+    }
+  }
+
   /* find corespondent features */
   RCLCPP_DEBUG(logger, "[estimateTransforms] pairwise matching features");
   (*matcher)(image_features, pairwise_matches);
